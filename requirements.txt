@@ -1,5 +1,8 @@
 opencv-python
 mediapipe==0.10.9
-numpy
 pynput
+
+# OLED Display dependencies (for Jetson Nano only)
+adafruit-circuitpython-ssd1306
+pillow
 

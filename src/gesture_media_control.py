@@ -1,11 +1,23 @@
 import cv2
 import mediapipe as mp
-import numpy as np
 import time
 import platform
-import subprocess
 import os
 from pynput.keyboard import Controller, Key
+
+# Optional OLED display support (Jetson Nano only)
+try:
+    from oled_display import update_oled
+    OLED_AVAILABLE = True
+    print("[INFO] OLED display module loaded successfully")
+except ImportError as e:
+    OLED_AVAILABLE = False
+    print(f"[INFO] OLED display not available: {e}")
+    print("[INFO] Running without OLED display (normal for Windows/Mac)")
+    
+    # Dummy function when OLED is not available
+    def update_oled(gesture="None", fps=0, latency=0):
+        pass
 
 
 # -------------- Cross-platform Media Control --------------
@@ -78,7 +90,7 @@ def send_key(key: str) -> None:
                     keyboard.release(Key.down)
                 else:
                     keyboard.press(main_key)
-                    keyboarrelease(main_key)
+                    keyboard.release(main_key)
                 
                 # Release modifiers
                 keyboard.release(Key.shift)
@@ -279,20 +291,12 @@ def main():
     print("  - One Finger (pointing up): Volume Down -10% (with VLC display)")
     print("  - Point Right: Next track")
     print("  - Point Left: Previous track\n")
-    print("[INFO] Performance Display Options:")
-    print("  - Camera window: Real-time metrics overlay")
-    print("  - VLC Overlay Window: Separate performance window (always on top)")
-    print("  - System notifications: Performance alerts")
-    print("  - Subtitle overlay: Load 'performance_overlay.srt' in VLC\n")
-    print("[TIP] Performance will show in multiple ways:")
-    print("  1. Separate overlay window (appears automatically)")
-    print("  2. System notifications when you perform gestures")
-    print("  3. Subtitle file: In VLC → Subtitle → Add Subtitle File → performance_overlay.srt")
+    print("[INFO] Performance metrics shown in camera window.")
     print("  4. Console output with detailed metrics\n")
     
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap = cv2.VideoCapture(0,cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
     cap.set(cv2.CAP_PROP_FPS, 30)
 
     if not cap.isOpened():
@@ -421,54 +425,25 @@ def main():
             else:
                 avg_total_latency = 0
             
-            # Overlay features disabled (no-op functions)
-            create_vlc_overlay_window(avg_fps, avg_total_latency, gesture_count, avg_total_latency, gesture_label_to_show)
-            create_performance_overlay_file(avg_fps, avg_total_latency, gesture_count, avg_total_latency)
-            
             last_osd_update = current_time
 
-        # Performance status colors
-        fps_color = (0, 255, 0) if avg_fps >= TARGET_FPS else (0, 165, 255)  # Green if good, Orange if low
-        latency_color = (0, 255, 0) if latency_ms <= TARGET_LATENCY_MS else (0, 165, 255)  # Green if good, Orange if high
 
         # Display performance metrics
-        cv2.putText(frame, f"Gesture: {gesture_label_to_show}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-        
-        # FPS with target indicator
-        fps_text = f"FPS: {avg_fps:.1f} (Target: ≥{TARGET_FPS})"
-        fps_status = "✓" if avg_fps >= TARGET_FPS else "⚠"
-        cv2.putText(frame, f"{fps_status} {fps_text}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, fps_color, 2)
-        
-        # Latency with target indicator
+        cv2.putText(frame, f"Gesture: {gesture_label_to_show}", (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+        cv2.putText(frame, f"FPS: {avg_fps:.1f}", (10, 60),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+
         if latency_ms > 0:
-            latency_text = f"Latency: {latency_ms:.1f}ms (Target: ≤{TARGET_LATENCY_MS}ms)"
-            latency_status = "✓" if latency_ms <= TARGET_LATENCY_MS else "⚠"
-            cv2.putText(frame, f"{latency_status} {latency_text}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, latency_color, 2)
+            cv2.putText(frame, f"Latency: {latency_ms:.1f}ms", (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+
+        update_oled(gesture_label_to_show, avg_fps, latency_ms)
+        
         
         # Performance summary
-        cv2.putText(frame, f"Gestures: {gesture_count}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        
-        # Average performance over session
-        if gesture_detection_times:
-            avg_detection = sum(gesture_detection_times) / len(gesture_detection_times)
-            avg_action = sum(action_execution_times) / len(action_execution_times)
-            avg_total_latency = avg_detection + avg_action
-            
-            cv2.putText(frame, f"Avg Latency: {avg_total_latency:.1f}ms", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
-        
-        # Performance indicators (top right corner)
-        frame_height, frame_width = frame.shape[:2]
-        
-        # FPS indicator
-        fps_indicator_color = (0, 255, 0) if avg_fps >= TARGET_FPS else (0, 0, 255)
-        cv2.circle(frame, (frame_width - 80, 30), 10, fps_indicator_color, -1)
-        cv2.putText(frame, "FPS", (frame_width - 110, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        # Latency indicator (only show when there's recent gesture activity)
-        if latency_ms > 0:
-            latency_indicator_color = (0, 255, 0) if latency_ms <= TARGET_LATENCY_MS else (0, 0, 255)
-            cv2.circle(frame, (frame_width - 40, 30), 10, latency_indicator_color, -1)
-            cv2.putText(frame, "LAT", (frame_width - 65, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        #cv2.putText(frame, f"Gestures: {gesture_count}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
         cv2.imshow("Hand Gesture Media Control", frame)
         key = cv2.waitKey(1) & 0xFF
@@ -479,8 +454,13 @@ def main():
     total_time = time.time() - start_time
     print(f"\n=== PERFORMANCE SUMMARY ===")
     print(f"Session duration: {total_time:.1f}s")
-    print(f"Total gestures recognized: {gesture_count}")
-    print(f"Average FPS: {avg_fps:.1f} (Target: ≥{TARGET_FPS}) {'✓' if avg_fps >= TARGET_FPS else '⚠'}")
+    print(f"Average FPS: {avg_fps:.1f}")
+    if gesture_detection_times:
+        avg_detection = sum(gesture_detection_times) / len(gesture_detection_times)
+        avg_action = sum(action_execution_times) / len(action_execution_times)
+        avg_total_latency = avg_detection + avg_action
+
+        print(f"Average Latency: {avg_total_latency:.1f} ms")
     
     if gesture_detection_times:
         avg_detection = sum(gesture_detection_times) / len(gesture_detection_times)
@@ -490,29 +470,6 @@ def main():
         print(f"Average detection time: {avg_detection:.1f}ms")
         print(f"Average action time: {avg_action:.1f}ms")
         print(f"Average end-to-end latency: {avg_total_latency:.1f}ms (Target: ≤{TARGET_LATENCY_MS}ms) {'✓' if avg_total_latency <= TARGET_LATENCY_MS else '⚠'}")
-        
-        # Performance targets met?
-        fps_target_met = avg_fps >= TARGET_FPS
-        latency_target_met = avg_total_latency <= TARGET_LATENCY_MS
-        
-        print(f"\n=== TARGET COMPLIANCE ===")
-        print(f"FPS Target (≥{TARGET_FPS}): {'PASS ✓' if fps_target_met else 'FAIL ⚠'}")
-        print(f"Latency Target (≤{TARGET_LATENCY_MS}ms): {'PASS ✓' if latency_target_met else 'FAIL ⚠'}")
-        
-        if fps_target_met and latency_target_met:
-            print(f"🎉 ALL PERFORMANCE TARGETS MET!")
-        else:
-            print(f"⚠️  Some performance targets not met. Consider optimization.")
-    else:
-        print("No gestures performed - no latency data available")
-    
-    # Cleanup (overlay features disabled, but keep for safety)
-    try:
-        if os.path.exists("performance_overlay.srt"):
-            os.remove("performance_overlay.srt")
-        cv2.destroyWindow("VLC Performance Overlay")
-    except:
-        pass
     
     cap.release()
     cv2.destroyAllWindows()
