@@ -162,3 +162,28 @@ Using **MediaPipe Hands**, a USB camera, and Python, it detects real-time hand g
   - Resolution is set to **640×480**.
   - MediaPipe Hands is configured with `model_complexity=0` and `max_num_hands=1` to keep latency low on Jetson Nano.
 
+## 🎥 Demo Video
+
+Watch the project demo here:
+
+👉 https://youtu.be/GmmsfG5WTk8?si=KZfpPczzZdsBfcBX
+
+---
+
+## 📄 Documentation
+
+Full project documentation:
+
+👉 [Download Project Report](./src/hci-aisoc.docx)
+
+---
+
+## 🚀 Project Overview
+
+Touchless Human–Computer Interaction system using:
+
+- Jetson Nano 2GB Edge AI deployment
+- Real-time hand gesture recognition
+- Media player control using gestures
+- OLED display integration for feedback
+- Optimized for low-resource hardware
