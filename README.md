@@ -174,7 +174,7 @@ Watch the project demo here:
 
 Full project documentation:
 
-👉 [Download Project Report](./src/hci-aisoc.docx)
+👉 [Download Project Report](docs/hci-aisoc.docx)
 
 ---
 
